@@ -5,6 +5,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
+import time
 
 model = YOLO("weights/best.pt")
 model.to("cuda")
@@ -13,96 +14,116 @@ x_center = 1920/2
 y_center = 1080/2
 closest_gem_distance = float('inf')
 safe_dist = 200
+roam_dist = 500
 
 output_folder = "detections"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
+def classify_direction(x1, y1):
+    if x1 < x_center and y1 < y_center:
+        return "topleft"
+    elif x1 > x_center and y1 < y_center:
+        return "topright"
+    elif x1 < x_center and y1 > y_center:
+        return "bottomleft"
+    else:
+        return "bottomright"
 
 def move(boxes, classes):
-    topleft = 0
-    bottomright = 0
-    bottomleft = 0
-    topright = 0
-    choice = ["topleft",0]
+    direction_count = {"topleft": 0, "topright": 0, "bottomleft": 0, "bottomright": 0}
+    danger = 0
+    roam = True
+    choice = ["still", 0]
+
     for box, cls in zip(boxes, classes):
         x1, y1, x2, y2 = box
         x_center_box = (x1 + x2) / 2
         y_center_box = (y1 + y2) / 2
         box_center_coords = (x_center_box, y_center_box)
         enemy_distance = find_distance(x_center_box, y_center_box, x_center, y_center)
+
         if names[cls].startswith("e_"):
-            if enemy_distance<safe_dist:
-                runaway(box_center_coords, None)
+            if enemy_distance < roam_dist:
+                roam = False
+                pyautogui.keyUp("a")
+
+            if enemy_distance < safe_dist:
+                runaway(box_center_coords, None) 
+                danger += 1
                 continue
-            x1, y1, x2, y2 = box
-            if x1 < x_center and y1 < y_center:
-                topleft += 1
-                if choice[1] < topleft:
-                    choice[0] = "topleft"
-                    choice[1] = topleft
-            elif x1 > x_center and y1 < y_center:
-                topright += 1
-                if choice[1] < topright:
-                    choice[0] = "topright"
-                    choice[1] = topright
-            elif  x1 < x_center and y1 > y_center:
-                bottomleft += 1
-                if choice[1] < bottomleft:
-                    choice[0] = "bottomleft"
-                    choice[1] = bottomleft
-            else:
-                bottomright += 1
-                if choice[1] < bottomright:
-                    choice[0] = "bottomright"
-                    choice[1] = bottomright
-    runaway(None, choice[0])
+
+            direction = classify_direction(x1, y1)
+            direction_count[direction] += 1
+
+            if direction_count[direction] > choice[1]:
+                choice = [direction, direction_count[direction]]
+
+        elif names[cls] == "levelup": 
+            pyautogui.keyDown("enter")
+
+    if danger == 0:
+        runaway(None, choice[0])
+    elif danger > 5:
+        move_circularly()
+    elif roam:
+        roam()
+
+
+def roam():
+    pyautogui.keyUp("s")
+    pyautogui.keyUp("w")
+    pyautogui.keyUp("d")
+    pyautogui.keyDown("a")
+
+def move_circularly(duration = 2, sleep_time = 0.1):
+    directions = [
+        ("w","a"),
+        ("w","d"),
+        ("s","a"),
+        ("s","d"),
+    ]
+    start_time = time.time()
+    while time.time() < start_time + duration:
+        for direction in directions:
+            pyautogui.keyDown(direction[0])
+            pyautogui.keyDown(direction[1])
+            time.sleep(sleep_time)
+            pyautogui.keyUp(direction[0])
+            pyautogui.keyUp(direction[1])
+            time.sleep(sleep_time)
+        
         
 def move_gem(coords):
     x, y = coords
-    if x < x_center:
-        pyautogui.keyUp("d")
-        pyautogui.keyDown("a")
-    else:
-        pyautogui.keyUp("a")
-        pyautogui.keyDown("d")
-    if y < y_center:
-        pyautogui.keyUp("s")
-        pyautogui.keyDown("w")
-    else:
-        pyautogui.keyUp("w")
-        pyautogui.keyDown("s")
+    pyautogui.keyUp("d" if x < x_center else "a")
+    pyautogui.keyDown("a" if x < x_center else "d")
+
+    pyautogui.keyUp("s" if y < y_center else "w")
+    pyautogui.keyDown("w" if y < y_center else "s")
 
 
 def runaway(coords=None, choice=None):
     if choice == None:
         x, y = coords
-        if x < x_center:
-            pyautogui.keyUp("a")
-            pyautogui.keyDown("d")
-        else:
-            pyautogui.keyUp("d")
-            pyautogui.keyDown("a")
-        if y < y_center:
-            pyautogui.keyUp("w")
-            pyautogui.keyDown("s")
-        else:
-            pyautogui.keyUp("s")
-            pyautogui.keyDown("w")
-    else:
-        if choice.startswith("top"):
-            pyautogui.keyUp("s")
-            pyautogui.keyDown("w")
-        else:
-            pyautogui.keyUp("w")
-            pyautogui.keyDown("s")
+        pyautogui.keyUp("d" if x > x_center else "a")
+        pyautogui.keyDown("a" if x > x_center else "d")
 
-        if choice.endswith("left"):
-            pyautogui.keyUp("d")
-            pyautogui.keyDown("a")
-        else:
-            pyautogui.keyUp("a")
-            pyautogui.keyDown("d")
+        pyautogui.keyUp("s" if y > y_center else "w")
+        pyautogui.keyDown("w" if y > y_center else "s")
+
+    elif choice == "still":
+        pyautogui.keyUp("s")
+        pyautogui.keyUp("w")
+        pyautogui.keyUp("d")
+        pyautogui.keyUp("a")
+
+    else:
+        pyautogui.keyUp("d" if choice.endswith("left") else "a")
+        pyautogui.keyDown("a" if choice.endswith("left") else "d")
+
+        pyautogui.keyUp("s" if choice.startswith("top") else "w")
+        pyautogui.keyDown("w" if choice.startswith("top")else "s")
 
 def find_distance(x1, y1, x2, y2):
     return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
