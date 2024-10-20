@@ -7,13 +7,12 @@ import matplotlib.patches as patches
 import os
 import time
 
-model = YOLO("weights/best.pt")
-model.to("cuda")
+model = YOLO("weights/best.engine")
 
 x_center = 1920/2
 y_center = 1080/2
 closest_gem_distance = float('inf')
-safe_dist = 200
+safe_dist = 300
 roam_dist = 500
 
 output_folder = "detections"
@@ -44,14 +43,14 @@ def move(boxes, classes):
         enemy_distance = find_distance(x_center_box, y_center_box, x_center, y_center)
 
         if names[cls].startswith("e_"):
-            if enemy_distance < roam_dist:
-                roam = False
-                pyautogui.keyUp("a")
-
             if enemy_distance < safe_dist:
-                runaway(box_center_coords, None) 
+                runaway(box_center_coords, None)
                 danger += 1
                 continue
+
+            elif enemy_distance < roam_dist:
+                roam = False
+                pyautogui.keyUp("a")
 
             direction = classify_direction(x1, y1)
             direction_count[direction] += 1
@@ -67,10 +66,10 @@ def move(boxes, classes):
     elif danger > 5:
         move_circularly()
     elif roam:
-        roam()
+        roam_func()
 
 
-def roam():
+def roam_func():
     pyautogui.keyUp("s")
     pyautogui.keyUp("w")
     pyautogui.keyUp("d")
@@ -96,21 +95,21 @@ def move_circularly(duration = 2, sleep_time = 0.1):
         
 def move_gem(coords):
     x, y = coords
-    pyautogui.keyUp("d" if x < x_center else "a")
-    pyautogui.keyDown("a" if x < x_center else "d")
+    pyautogui.keyUp("d" if x > x_center else "a")
+    pyautogui.keyDown("a" if x > x_center else "d")
 
-    pyautogui.keyUp("s" if y < y_center else "w")
-    pyautogui.keyDown("w" if y < y_center else "s")
+    pyautogui.keyUp("s" if y > y_center else "w")
+    pyautogui.keyDown("w" if y > y_center else "s")
 
 
 def runaway(coords=None, choice=None):
     if choice == None:
         x, y = coords
-        pyautogui.keyUp("d" if x > x_center else "a")
-        pyautogui.keyDown("a" if x > x_center else "d")
+        pyautogui.keyUp("d" if x < x_center else "a")
+        pyautogui.keyDown("a" if x < x_center else "d")
 
-        pyautogui.keyUp("s" if y > y_center else "w")
-        pyautogui.keyDown("w" if y > y_center else "s")
+        pyautogui.keyUp("s" if y < y_center else "w")
+        pyautogui.keyDown("w" if y < y_center else "s")
 
     elif choice == "still":
         pyautogui.keyUp("s")
@@ -119,11 +118,11 @@ def runaway(coords=None, choice=None):
         pyautogui.keyUp("a")
 
     else:
-        pyautogui.keyUp("d" if choice.endswith("left") else "a")
-        pyautogui.keyDown("a" if choice.endswith("left") else "d")
+        pyautogui.keyUp("d" if choice.endswith("right") else "a")
+        pyautogui.keyDown("a" if choice.endswith("right") else "d")
 
-        pyautogui.keyUp("s" if choice.startswith("top") else "w")
-        pyautogui.keyDown("w" if choice.startswith("top")else "s")
+        pyautogui.keyUp("s" if choice.startswith("bottom") else "w")
+        pyautogui.keyDown("w" if choice.startswith("bottomds")else "s")
 
 def find_distance(x1, y1, x2, y2):
     return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
